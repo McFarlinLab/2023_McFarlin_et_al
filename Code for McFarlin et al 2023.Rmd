@@ -1,0 +1,1203 @@
+---
+title: "Aquatic plant wax hydrogen and carbon isotopes in Greenland lakes record shifts in methane cycling during past Holocene warming"
+author: "J. McFarlin, Y. Axford, S. Kusch, A. Masterson, G. Lasher, M. Osburn"
+date: "`r format(Sys.Date(), '%d %b %Y')`"
+output:
+  pdf_document:
+    toc: yes
+    toc_depth: '3'
+  html_document:
+    code_folding: show
+    css: stylesheet.css
+    df_print: paged
+    number_sections: yes
+    toc: yes
+    toc_depth: 3
+    toc_float: yes
+subtitle: null
+editor_options:
+  chunk_output_type: console
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include=F}
+
+# load libraries
+library(ggplot2)
+library(GGally)
+library(cowplot)
+library(ggcorrplot)
+library(stats)
+library(dplyr)
+library(plyr)
+library(tidyverse)
+library(viridis)
+library(magick)
+
+
+knitr::opts_chunk$set(echo=TRUE,
+  dev = c("png", "pdf"),
+  dev.args = list(pdf = list(encoding = "WinAnsi", useDingbats = FALSE)),
+  fig.keep = "all",
+  fig.path = file.path("plots", "figure_")
+)
+
+```
+
+# Proxy Calibration Data
+
+```{r, warning=F}
+#Calibration Datasets to infer water isotopes from proxy isotopes
+
+#Van Hardenbroek et al 2018, QSR
+VH <-read.csv("data/Published Data/Calibration Datasets/Van Hardenbroek et al 2018 Fig 5 Data.csv")
+
+#McFarlin et al 2019, QSR
+#Using C29-precip regression
+McF <-read.csv("data/Published Data/Calibration Datasets/McFarlin et al 2019 Fig 7 Data.csv")
+
+#Using C28-precip regression
+McF_acid <- read.csv("data/Published Data/Calibration Datasets/McFarlin et al 2019 Fig 7 Data Acids.csv")
+
+#GNIP data for Thule 
+#used to assess the local meteoric water line (LMWL)
+GNIP <- read.csv("data/Published Data/Calibration Datasets/Thule Pitiffuk GNIP data.csv")
+
+```
+
+# Proxy Calibration Data Summaries + Plots
+
+## Alkanes d2H
+
+```{r alkane d2H calibration data, warning=F}
+
+#d2H Wax-Water Relationship for C29 Alkanes
+summary(lm(McF$dD_C29~McF$dD_OIPC_ANN))
+
+#plot of summarized data above
+ggplot(McF, aes(dD_OIPC_ANN, dD_C29))+geom_point(aes(color=Latitude))+
+  geom_abline(intercept=-129, slope=0.78)+
+  ylim(-300,-50)+
+  xlim(-200,0)+
+  ylab(expression(delta^{"2"}*"H"["C29 Alkanes "]*" (\u2030)"))+
+  xlab(expression(delta^{"2"}*"H"["OIPC Annual Precip "]*" (\u2030)"))+
+  theme(aspect.ratio=1)+
+  ggtitle(expression(paste(delta^{"2"}*"H"*
+                             " Alkane - Water Relationship")))+
+  theme(
+   plot.title = element_text(color="magenta", hjust=0.5, size=12, 
+                              face="bold"))
+
+#Eapp for C29 wax-water
+McF <- mutate(McF, EappC29 =
+                ((1000*(((1000+dD_C29)/(1000+dD_OIPC_ANN)-1)))))
+mean(McF$EappC29,na.rm=T)
+sd(McF$EappC29,na.rm=T)
+length(na.omit(McF$EappC29))
+
+#Eapp for C23 wax-water
+McF <- mutate(McF, 
+              EappC23 = ((1000*(((1000+dD_C23)/(1000+dD_Lake)-1)))))
+mean(McF$EappC23,na.rm=T)
+sd(McF$EappC23,na.rm=T)
+length(na.omit(McF$EappC23))
+
+```
+
+## Alkanoic acids d2H
+
+```{r alkanoic acid d2H calibration data, warning=F}
+#d2H Wax-Water Relationship for C28 Alkanoic Acids
+summary(lm(McF_acid$dD_C28~McF_acid$dD_OIPC_ANN)) 
+
+#plot of summarized data above
+ggplot(McF_acid, aes(dD_OIPC_ANN,dD_C28))+geom_point(aes(col=Latitude))+
+  geom_abline(intercept=-125, slope=0.62)+
+  ylim(-300,-50)+
+  xlim(-200,0)+
+  ylab(expression(delta^{"2"}*"H"["C28 Alkanoic Acid "]*" (\u2030)"))+
+  xlab(expression(delta^{"2"}*"H"["OIPC Annual Precip "]*" (\u2030)"))+
+  theme(aspect.ratio=1)+
+  theme(aspect.ratio=1)+
+  ggtitle(expression(paste(delta^{"2"}*"H"*
+                             " Alkanoic Acid - Water Relationship")))+
+  theme(
+    plot.title = element_text(color="magenta", hjust=0.5, size=12, 
+                              face="bold"))
+
+#Eapp for C28 wax-water
+McF_acid <- mutate(McF_acid, 
+                   EappC28 = 
+                     ((1000*(((1000+dD_C28)/(1000+dD_OIPC_ANN)-1)))))
+mean(McF_acid$EappC28,na.rm=T)
+sd(McF_acid$EappC28,na.rm=T)
+length(na.omit(McF_acid$EappC28))
+
+#Eapp for C24 wax-water
+McF_acid <- mutate(McF_acid, 
+              EappC24 = ((1000*(((1000+dD_C24)/(1000+dD_Lake)-1)))))
+mean(McF_acid$EappC24,na.rm=T)
+sd(McF_acid$EappC24,na.rm=T)
+length(na.omit(McF_acid$EappC24))
+```
+
+## Chironomid d18O
+
+```{r chironomid d18O calibration data, warning=F}
+#chiron-lake water relationship from Van Hardenbroek et al 2018 data 
+summary(lm(VH$d18Ochiron~VH$d18Olw))
+
+#plot of summarized data above
+ggplot(VH, aes(d18Olw, d18Ochiron))+geom_point(aes(color=study))+
+  geom_abline(intercept=22.5, slope=0.89)+
+  theme(aspect.ratio=1)+
+  ylab(expression(delta^{"18"}*"O"["chironomid "]*" (\u2030)"))+
+  xlab(expression(delta^{"18"}*"O"["lake water "]*" (\u2030)"))+
+  ggtitle(expression(paste(delta^{"18"}*"O"*
+                             " Chironomid - Lake Water Relationship")))+
+  theme(
+    plot.title = element_text(color="magenta", hjust=0.5, size=12, 
+                              face="bold"))
+  
+
+#calculating average apparent fractionation factor
+VH <- mutate(VH, Eapp = ((1000*(((1000+d18Ochiron)/(1000+d18Olw)-1)))))
+mean(VH$Eapp,na.rm=T)
+sd(VH$Eapp, na.rm=T)
+length(na.omit(VH$Eapp))
+```
+
+## LMWL
+
+```{r Thule LMWL,warning=F}
+
+#Thule, Greenland station
+summary(lm(GNIP$H2 ~ GNIP$O18))
+
+#plot of summarized data above
+ggplot(GNIP, aes(O18, H2, color=Month))+geom_point(shape=3, cex=3)+
+  geom_abline(intercept=-7.1, slope=7.3)+
+  theme(aspect.ratio=1)+
+  ylab(expression(delta^{"2"}*"H"["precip "]*" (\u2030)"))+
+  xlab(expression(delta^{"18"}*"O"["precip "]*" (\u2030)"))+
+  ggtitle(expression(paste("Pitiffuk GNIP Water Isotopes")))+
+  theme(
+    plot.title = element_text(color="magenta", hjust=0.5, size=12, 
+                              face="bold"))
+
+#other LMWLs (e.g., west Greenland) are derived from relationships reported in the original publication
+```
+
+# Contemporaneous Regional Climate Data
+
+## Northern Hemisphere Ice Core Data
+
+```{r N hemisphere ice core d18O,warning=F}
+
+#Agassiz data from LeCavalier et al 2017
+Ag <- read.csv("data/Published Data/Greenland Ice Core d18O/Agassiz_d18O_LeCavalier et al 2017.csv")
+
+#Renland data from Vinther et al 2009
+Ren <- read.csv("data/Published Data/Greenland Ice Core d18O/Renland_d18O_Vinther et al 2009.csv")
+
+#plot showing trends in d18Oice
+ggplot(Ag, aes(Age, d18O))+geom_line(aes(color="Agassiz"))+
+  geom_line(data=Ren, aes(Age, Renland, color="Renland"))+
+  ylim(-30,-24)+
+  xlim(0,10000)+
+  ylab(expression(delta^{"18"}*"O"["ice core "]*" (\u2030)"))+
+  xlab("Age (cal yrs BP)")+
+  ggtitle(expression(paste("N. Hemisphere Ice Cores")))+
+  theme(
+    plot.title = element_text(color="magenta", hjust=0.5, size=12, 
+                              face="bold"))+
+  labs(colour="Core Site")
+
+```
+
+## Greenland Chiron-Inferred Air Temperature
+
+```{r Greenland Holocene July Air Temp,warning=F}
+
+#North Lake (NL)
+axford13 <- read.csv("data/Published Data/Greenland Holocene Temps/Axford Greenland chiron temps/Axford et al 2013 North Lake Temp.csv")
+
+#Last Chance Lake (LCL)
+axford17 <- read.csv("data/Published Data/Greenland Holocene Temps/Axford Greenland chiron temps/Axford et al 2017 LCL E GL Temp.csv")
+
+#Delta Sø (DS)
+axford19 <- read.csv("data/Published Data/Greenland Holocene Temps/Axford Greenland chiron temps/Axford et al 2019 DS NW GL Temp.csv")
+
+#Secret Lake (SL)
+lasher17 <- read.csv("data/Published Data/Greenland Holocene Temps/Lasher et al 2017 Secret/Lasher et al 2017 chiron d18O temp.csv")
+
+#Wax Lips Lake (WLL)
+mcfarlin18 <- read.csv("data/Published Data/Greenland Holocene Temps/McFarlin Greenland chiron temps/McFarlin et al 2018 WLL Temp Data.csv")
+
+ggplot(axford13, aes(age_calBP, tanom.J_average, color="NL"))+geom_line()+
+  geom_line(data=axford17, aes(age_calBP, Average_Tanom, color="LCL"))+
+  geom_line(data=axford19, aes(age_calBP, anom_average, color="DS"))+
+  geom_line(data=lasher17, aes(age_calBP, ave_anom, color="SL"))+
+  geom_line(data=mcfarlin18, aes(Age, TempAnom, color="WLL"))+
+  xlim(0,10000)+
+  xlab("Age (cal yrs BP)")+
+  ylab(expression("July Temp. Anom. ("*degree*"C)"))+
+  ggtitle(expression(paste("Greenland Holocene Air Temp. Estimates")))+
+  theme(
+    plot.title = element_text(color="magenta", hjust=0.5, size=12, 
+                              face="bold"))+
+  labs(colour="Lake")
+
+```
+
+# Wax Lips Lake (WLL) Core Data
+
+## Plant Wax d2H
+
+```{r,warning=F}
+#WLL Plant Wax (Alkane) d2H
+WLLd2H <- read.csv("data/This Study/WLL/WLL Alkane d2H.csv")
+```
+
+### Estimates of Precip d2H from long-chain wax d2H
+
+```{r WLL downcore wax d2H,warning=F}
+
+ggplot(WLLd2H, aes(Age, C29))+
+  geom_point()+
+  geom_line()+
+  xlim(0,10000)+
+  xlab("Age (cal yrs BP)")+
+  ylab(expression(delta^{"2"}*"H"["C29 wax"]*" (\u2030)"))+
+  ggtitle(expression(paste(delta^{"2"}*"H"*
+                             " Inferred Precip, with Outliers")))+
+  theme(
+   plot.title = element_text(color="magenta", hjust=0.5, size=12, 
+                              face="bold"))
+
+#setting any values w/o stdev data (i.e., n=1) to NA=0
+WLLd2H[is.na(WLLd2H)]=0
+
+#remove outlier data points
+#rows 2 & 6 distinct outliers
+#rows 12 & 13 from within discrete glacial layer, not analogous to nonglacial lake conditions
+WLLd2H <- WLLd2H[-c(2,6,12:13),]
+
+ggplot(WLLd2H, aes(Age, C29))+
+  geom_point()+
+  geom_line()+
+  xlim(0,10000)+
+  xlab("Age (cal yrs BP)")+
+  ylab(expression(delta^{"2"}*"H"["C29 wax"]*" (\u2030)"))+
+  ggtitle(expression(paste(delta^{"2"}*"H"*
+                             " Inferred Precip, without Outliers")))+
+  theme(
+   plot.title = element_text(color="magenta", hjust=0.5, size=12, 
+                              face="bold"))
+
+#calculate water from wax hydrogen isotope values including error around estimates 
+#C29.p = d2Hprecip estimated from C29 alkanes
+WLLd2H <- mutate(WLLd2H, C29.p = (1000*(((1000+C29)/(1000-121))-1)))
+
+#calculating compounded error using std dev on duplicate measurements and std dev on calibration data
+WLLd2H <- mutate(WLLd2H, errC29p = sqrt(stdev_C29^2 + 18^2))
+
+#upper and lower bounds on estimates of precipitation
+WLLd2H <- mutate(WLLd2H, C29up = C29.p + errC29p)
+WLLd2H <- mutate(WLLd2H, C29low = C29.p - errC29p)
+```
+
+### Estimates of Moss Water d2H from mid-chain wax d2H
+
+```{r,warning=F}
+#d2H moss water estimated from C23 alkanes
+WLLd2H <- mutate(WLLd2H, C23.moss = (1000*(((1000+C23)/(1000-121))-1)))
+
+#calculating compounded error using std dev on duplicate measurements and std dev on calibration data
+WLLd2H <- mutate(WLLd2H, errC23moss = sqrt(stdev_C23^2 + 18^2))
+
+#upper and lower bounds on estimates of moss water from C23 alkanes
+WLLd2H <- mutate(WLLd2H, C23up = C23.moss + errC23moss)
+WLLd2H <- mutate(WLLd2H, C23low = C23.moss - errC23moss)
+
+#d2H moss water estimated from C21 alkanes
+WLLd2H <- mutate(WLLd2H, C21.moss = (1000*(((1000+C21)/(1000-121))-1)))
+
+#calculating compounded error using std dev on duplicate measurements and std dev on calibration data
+WLLd2H <- mutate(WLLd2H, errC21moss = sqrt(stdev_C21^2 + 18^2))
+
+#upper and lower bounds on estimates of moss water from C21 alkanes
+WLLd2H <- mutate(WLLd2H, C21up = C21.moss + errC21moss)
+WLLd2H <- mutate(WLLd2H, C21low = C21.moss - errC21moss)
+
+```
+
+## Chironomid d18O
+
+```{r,warning=F}
+#WLL chironomid oxygen isotope values
+WLLchiron <- read.csv("data/This Study/WLL/WLL Chiron d18O.csv")
+```
+
+### Estimates of lake water d18O from chironomid d18O
+
+```{r,warning=F}
+#calculate lake water from chironomid oxygen isotope values including error around estimates
+WLLchiron <- mutate(WLLchiron, d18Olw = (((d18Ochiron*0.96067)-22.64295)))
+
+#compounded error on estimate for lake water d18O estimated from error on the analytical measurement and error on the regression
+#error on regression here is 2.421
+WLLchiron <- mutate(WLLchiron, 
+                    err_d18Olw = sqrt(2.421^2 + d18Ochiron.e^2))
+
+#upper and lower estimates of lake water d18O
+WLLchiron <- mutate(WLLchiron, d18Olw_up = d18Olw+err_d18Olw)
+WLLchiron <- mutate(WLLchiron, d18Olw_low = d18Olw-err_d18Olw)
+```
+
+### Estimates of lake water d2H from chiron-inferred lake water d18O
+
+```{r,warning=F}
+#estimating d2H of lake water at WLL using the LMWL for Thule
+WLLchiron <- mutate(WLLchiron, d2Hlw = (((d18Olw*7.3337)-7.1404)))
+
+#upper and lower bounds based on compounded error above
+WLLchiron <- mutate(WLLchiron, 
+                    d2Hlw_up_err = (((d18Olw_up*7.3337)-7.1404)))
+WLLchiron <- mutate(WLLchiron, 
+                    d2Hlw_low_err = (((d18Olw_low*7.3337)-7.1404)))
+
+#now including error on the LMWL regression
+#error on regression is 9.003
+WLLchiron <- mutate(WLLchiron, errd2Hlw = sqrt(9.003^2))
+
+#upper and lower bounds with regression error included
+WLLchiron <- mutate(WLLchiron, d2Hlw_up = d2Hlw_up_err+errd2Hlw)
+WLLchiron <- mutate(WLLchiron, d2Hlw_low = d2Hlw_low_err-errd2Hlw)
+
+```
+
+## WLL Multi-proxy water plot
+
+```{r WLL reconstructed water d2H,warning=F}
+
+#Plot water data
+#Endmember values estimated using the OIPC
+# d2Hwinter endmember = -258
+# d2Hsummer endmember = -131
+# d2Hlake water modern = -153
+# error windows represented by up and low estimates
+
+ggplot(WLLd2H, aes(Age, C23.moss))+geom_line(aes(color="C23 moss water"))+
+  geom_ribbon(aes(ymin=C23low, ymax=C23up, fill="C23 moss water"), alpha=0.5)+
+  geom_line(aes(Age, C29.p, color="precip"))+
+  geom_ribbon(aes(ymin=C29low, ymax=C29up, fill="precip"), alpha=0.5)+
+  geom_line(aes(Age, C21.moss, color="C21 moss water"))+
+  geom_ribbon(aes(ymin=C21low, ymax=C21up, fill="C21 moss water"), alpha=0.5)+
+  geom_line(data=WLLchiron, 
+            aes(Age, d2Hlw, color="chiron lake water"), cex=2)+
+  geom_line(data=WLLchiron, 
+            aes(Age, d2Hlw_up, color="chiron upp error"))+
+  geom_line(data=WLLchiron, 
+            aes(Age, d2Hlw_low, color="chiron low err"))+
+  geom_hline(yintercept=-258)+
+  geom_hline(yintercept=-131)+
+  geom_hline(yintercept=-153)+
+  xlim(0,10000)+
+  ylab(expression(delta^{"2"}*"H"["water "]*" (\u2030) VSMOW"))+
+  xlab("Age (cal yrs BP)")+
+  ggtitle(expression(paste("WLL Reconstructed Water Isotopes")))+
+  theme(
+    plot.title = element_text(color="magenta", hjust=0.5, size=12, 
+                              face="bold"))+
+  labs(colour="Water Represented", fill="Error on Water Represented")
+
+
+```
+
+# Trifna Sø
+
+## Plant Wax d2H
+
+```{r,warning=F}
+#TS Plant Wax (Alkane) d2H
+TSd2H <- read.csv("data/This Study/ Trinfa So/TS Alkane d2H.csv")
+
+#plot wax d2H values for TS
+ggplot(TSd2H, aes(Age, C23))+geom_line(aes(color="C23"))+
+  geom_line(aes(Age, C21, color="C21"))+
+  geom_line(aes(Age, C29, color="C29"))+
+  xlim(0,10000)+
+  ylab(expression(delta^{"2"}*"H"["wax "]*" (\u2030) VSMOW"))+
+  xlab("Age (cal yrs BP)")+
+  ggtitle(expression(paste("TS Plant Wax")))+
+  theme(
+    plot.title = element_text(color="magenta", hjust=0.5, size=12, 
+                              face="bold"))+
+  labs(colour="Alkanes")
+
+```
+
+### Estimates of Precip d2H from long-chain wax d2H
+
+```{r,warning=F}
+#again where no duplicate runs provide stdev on values convert NA to value 0
+TSd2H$stdev_C21[is.na(TSd2H$stdev_C21)]=0
+TSd2H$stdev_C23[is.na(TSd2H$stdev_C23)]=0
+TSd2H$stdev_C25[is.na(TSd2H$stdev_C25)]=0
+TSd2H$stdev_C27[is.na(TSd2H$stdev_C27)]=0
+TSd2H$stdev_C29[is.na(TSd2H$stdev_C29)]=0
+TSd2H$stdev_C31[is.na(TSd2H$stdev_C31)]=0
+TSd2H$stdev_C33[is.na(TSd2H$stdev_C33)]=0
+
+#this is replicated code from WLL above (see WLL for more detailed notes)
+
+#precipitation d2H estimates from C29 waxes (alkanes)
+TSd2H <- mutate(TSd2H, C29.p = (1000*(((1000+C29)/(1000-121))-1)))
+TSd2H <- mutate(TSd2H, errC29p = sqrt(stdev_C29^2 + 18^2))
+TSd2H <- mutate(TSd2H, C29up = C29.p + errC29p)
+TSd2H <- mutate(TSd2H, C29low = C29.p - errC29p)
+```
+
+### Estimates of Moss Water d2H from mid-chain wax d2H
+
+```{r,warning=F}
+#moss water d2H estimates from C23 waxes (alkanes)
+TSd2H <- mutate(TSd2H, C23.moss = (1000*(((1000+C23)/(1000-121))-1)))
+TSd2H <- mutate(TSd2H, errC23moss = sqrt(stdev_C23^2 + 18^2))
+TSd2H <- mutate(TSd2H, C23up = C23.moss + errC23moss)
+TSd2H <- mutate(TSd2H, C23low = C23.moss - errC23moss)
+
+#d2H moss water estimated from C21 waxes (alkanes)
+TSd2H <- mutate(TSd2H, C21.moss = (1000*(((1000+C21)/(1000-121))-1)))
+TSd2H <- mutate(TSd2H, errC21moss = sqrt(stdev_C21^2 + 18^2))
+TSd2H <- mutate(TSd2H, C21up = C21.moss + errC21moss)
+TSd2H <- mutate(TSd2H, C21low = C21.moss - errC21moss)
+```
+
+## TS Multi-proxy water plot
+
+```{r TS reconstructed water d2H,warning=F}
+
+#Plot water data
+#Endmember values estimated using the OIPC
+# d2Hwinter endmember = -220
+# d2Hsummer endmember = -130
+# d2Hlake water modern = n.d.
+# error windows represented by up and low estimates
+ggplot(TSd2H, aes(Age, C29.p))+geom_line(aes(color="precip"))+
+  geom_ribbon(aes(ymin=C29low, ymax=C29up, fill="precip"), alpha=0.5)+
+  geom_line(aes(Age, C23.moss, color="C23 moss water"))+
+  geom_ribbon(aes(ymin=C23low, ymax=C23up, fill="C23 moss water"), alpha=0.5)+
+  geom_line(aes(Age, C21.moss, color="C21 moss water"))+
+  geom_ribbon(aes(ymin=C21low, ymax=C21up, fill="C21 moss water"), alpha=0.5)+
+  geom_hline(yintercept = -220)+
+  geom_hline(yintercept = -130)+
+  xlim(0,10000)+
+  ylab(expression(delta^{"2"}*"H"["water "]*" (\u2030) VSMOW"))+
+  xlab("Age (cal yrs BP)")+
+  ggtitle(expression(paste("TS Reconstructed Water Isotopes")))+
+  theme(
+    plot.title = element_text(color="magenta", hjust=0.5, size=12, 
+                              face="bold"))+
+  labs(colour="Water Represented", fill="Error on Water Represented")
+
+```
+
+# Lake N3
+
+## Plant Wax d2H
+
+```{r N3 downcore wax d2H, warning=F}
+#N3 Plant Wax (Alkanoic Acids) d2H
+#Data reported by Thomas et al 2016
+N3d2H <- read.csv("data/Published Data/Greenland Holocene Plant Wax Isotopes/Thomas et al 2016 2020 N3/Thomas 2016 d2H wax.csv")
+
+#visual of trends in C24 and C28
+ggplot(N3d2H, aes(Age, d2HC24))+
+  geom_line(aes(color="C24"))+
+  geom_line(aes(Age, d2HC28, color="C28"))+
+  ylab(expression(delta^{"2"}*"H"["wax "]*" (\u2030) VSMOW"))+
+  xlab("Age (cal yrs BP)")+
+  labs(colour="Alkanoic Acid")+
+  ggtitle(expression(paste(delta^{"2"}*"H"*
+                             " N3 Plant Wax, with Outliers")))+
+  theme(
+   plot.title = element_text(color="magenta", hjust=0.5, size=12, 
+                              face="bold"))
+
+#remove clear outliers
+N3d2H <- N3d2H[-c(56,78),]
+
+#re-visualize
+ggplot(N3d2H, aes(Age, d2HC24))+
+  geom_line(aes(color="C24"))+
+  geom_line(aes(Age, d2HC28, color="C28"))+
+  ylab(expression(delta^{"2"}*"H"["wax "]*" (\u2030) VSMOW"))+
+  xlab("Age (cal yrs BP)")+
+  labs(colour="Alkanoic Acid")+
+  ggtitle(expression(paste(delta^{"2"}*"H"*
+                             " N3 Plant Wax, without Outliers")))+
+  theme(
+   plot.title = element_text(color="magenta", hjust=0.5, size=12, 
+                              face="bold"))
+
+#filter out some of these columns that we don't need so that we just have age, d2H values, and std dev on d2H valuves
+names(N3d2H)
+N3d2H <-N3d2H[,-c(1:2,4:5)]
+colnames(N3d2H) <- c("Age","C26","stdev_C26",
+                     "C28","stdev_C28","C24","stdev_C24")
+names(N3d2H)
+```
+
+### Estimates of Precip d2H from long-chain wax d2H
+
+```{r,warning=F}
+
+#this is replicated code from WLL above (see WLL for more detailed notes)
+
+#precipitation d2H estimates from C28 waxes (alkanoic acids)
+N3d2H <- mutate(N3d2H, C28.p = (1000*(((1000+C28)/(1000-99))-1)))
+N3d2H <- mutate(N3d2H, errC28p = sqrt(stdev_C28^2 + 32^2))
+N3d2H <- mutate(N3d2H, C28up = C28.p + errC28p)
+N3d2H <- mutate(N3d2H, C28low = C28.p - errC28p)
+```
+
+### Estimates of Moss Water d2H from mid-chain wax d2H
+
+```{r,warning=F}
+#d2H moss water estimated from C24 waxes (alkanoic acids)
+N3d2H <- mutate(N3d2H, C24.moss = (1000*(((1000+C24)/(1000-99))-1)))
+N3d2H <- mutate(N3d2H, errC24moss = sqrt(stdev_C24^2 + 32^2))
+N3d2H <- mutate(N3d2H, C24up = C24.moss + errC24moss)
+N3d2H <- mutate(N3d2H, C24low = C24.moss - errC24moss)
+```
+
+## Chironomid d18O
+
+```{r,warning=F}
+#N3 chironomid oxygen isotope values from Corcoran et al 2021
+N3chiron <- read.csv("data/Published Data/Greenland Holocene Plant Wax Isotopes/Corcoran et al 2021/Corcoran 2021_chironomiddata.csv")
+```
+
+### Estimates of lake water d18O from chironomid d18O
+
+```{r,warning=F}
+#this is replicated code from WLL above (see WLL for more detailed notes)
+
+#calculate lake water from chironomid oxygen isotope values including error around estimates
+N3chiron <- mutate(N3chiron, d18Olw = (((d18O*0.96067)-22.64295)))
+
+#error on regression here is 2.421
+N3chiron <- mutate(N3chiron, err_d18Olw = sqrt(2.421^2 + d18Oerr^2))
+
+N3chiron <- mutate(N3chiron, d18Olw_up = d18Olw+err_d18Olw)
+N3chiron <- mutate(N3chiron, d18Olw_low = d18Olw-err_d18Olw)
+```
+
+### Estimates of lake water d2H from chiron-inferred lake water d18O
+
+```{r,warning=F}
+#using N3 LMWL reported in original publication (Corcoran et al 2021)
+#LMWL regression: d2H_lw = 6.8*d18O_lw - 13.7
+N3chiron <- mutate(N3chiron, d2Hlw = (((d18Olw*6.8)-13.7)))
+N3chiron <- mutate(N3chiron, d2Hlw_up_err = (((d18Olw_up*6.8)-13.7)))
+N3chiron <- mutate(N3chiron, d2Hlw_low_err = (((d18Olw_low*6.8)-13.7)))
+
+#estimated error on regression based on WLL used here is 9
+N3chiron <- mutate(N3chiron, errd2Hlw = sqrt(9^2))
+N3chiron <- mutate(N3chiron, d2Hlw_up = d2Hlw_up_err+errd2Hlw)
+N3chiron <- mutate(N3chiron, d2Hlw_low = d2Hlw_low_err-errd2Hlw)
+
+```
+
+## N3 Multi-proxy water plot
+
+```{r N3 reconstructed water d2H,warning=F}
+
+#Plot water data
+#Endmember values estimated using the OIPC
+# d2Hwinter endmember = -190
+# d2Hsummer endmember = -105
+# d2Hlake water modern = -96
+# error windows represented by up and low estimates
+ggplot(N3d2H, aes(Age, C28.p))+geom_line(aes(color="precip"))+
+  geom_ribbon(aes(ymin=C28low,ymax=C28up, fill="precip"), alpha=0.5)+
+  geom_line(aes(Age, C24.moss, color="C24 moss water"))+
+  geom_ribbon(aes(ymin=C24low,ymax=C24up, fill="C24 moss water"), alpha=0.5)+
+  geom_hline(yintercept=-190)+
+  geom_hline(yintercept=-105)+
+  geom_hline(yintercept=-96)+
+  geom_line(data=N3chiron, aes(age, d2Hlw, color="chiron lake water"))+
+  geom_line(data=N3chiron, aes(age, d2Hlw_up, color="chiron upp error"))+
+  geom_line(data=N3chiron, aes(age, d2Hlw_low, color="chiron low error"))+
+  xlim(0,10000)+
+  ylab(expression(delta^{"2"}*"H"["water "]*" (\u2030) VSMOW"))+
+  xlab("Age (cal yrs BP)")+
+  ggtitle(expression(paste("N3 Reconstructed Water Isotopes")))+
+  theme(
+    plot.title = element_text(color="magenta", hjust=0.5, size=12, 
+                              face="bold"))+
+  labs(colour="Water Represented", fill="Error on Water Represented")
+```
+
+# Pluto Lake
+
+## Plant Wax d2H
+
+```{r,warning=F}
+#Data reported by Thomas et al 2020
+PLd2H <- read.csv("data/Published Data/Greenland Holocene Plant Wax Isotopes/Thomas et al 2020 Pluto/Thomas Pluto Lake d2H.csv")
+
+#filter out unused columns so that we just have age and d2H values
+PLd2H <- PLd2H[,-c(1:4,7,10,13,16,19,22:39)]
+
+#consistent naming of d2H data and error on d2H values
+colnames(PLd2H) <- c("C20","stdev_C20","C22","stdev_C22","C24","stdev_C24",
+                     "C26","stdev_C26","C28","stdev_C28","C30","stdev_C30",
+                     "Age")
+
+```
+
+### Estimates of Precip d2H from long-chain wax d2H
+
+```{r,warning=F}
+#this is replicated code from WLL above (see WLL for more detailed notes)
+#precipitation d2H estimates from C28 waxes (alkanoic acids)
+PLd2H <- mutate(PLd2H, C28.p = (1000*(((1000+C28)/(1000-99))-1)))
+PLd2H <- mutate(PLd2H, errC28p = sqrt(stdev_C28^2 + 32^2))
+PLd2H <- mutate(PLd2H, C28up = C28.p + errC28p)
+PLd2H <- mutate(PLd2H, C28low = C28.p - errC28p)
+```
+
+### Estimates of Moss Water d2H from mid-chain wax d2H
+
+```{r,warning=F}
+#d2H moss water estimated from C24 alkanoic acids
+PLd2H <- mutate(PLd2H, C24.moss = (1000*(((1000+C24)/(1000-99))-1)))
+PLd2H <- mutate(PLd2H, errC24moss = sqrt(stdev_C24^2 + 32^2))
+PLd2H <- mutate(PLd2H, C24up = C24.moss + errC24moss)
+PLd2H <- mutate(PLd2H, C24low = C24.moss - errC24moss)
+```
+
+## PL Multi-proxy water plot
+
+```{r PL reconstructed water d2H,warning=F}
+#Plot water data
+#Endmember values estimated using the OIPC
+# d2Hwinter endmember = -190
+# d2Hsummer endmember = -105
+# d2Hlake water modern = n.d.
+# error windows represented by up and low estimates
+ggplot(PLd2H, aes(Age, C28.p))+geom_line(aes(color="precip"))+
+  geom_ribbon(aes(ymin=C28low,ymax=C28up, fill="precip"), alpha=0.5)+
+  geom_line(aes(Age, C24.moss, color="C24 moss"))+
+  geom_ribbon(aes(ymin=C24low,ymax=C24up, fill="C24 moss"), alpha=0.5)+
+  geom_hline(yintercept=-190)+
+  geom_hline(yintercept=-105)+
+  xlim(0,10000)+
+  ylab(expression(delta^{"2"}*"H"["water "]*" (\u2030) VSMOW"))+
+  xlab("Age (cal yrs BP)")+
+  ggtitle(expression(paste("PL Reconstructed Water Isotopes")))+
+  theme(
+    plot.title = element_text(color="magenta", hjust=0.5, size=12, 
+                              face="bold"))+
+  labs(colour="Water Represented", fill="Error on Water Represented")
+
+```
+
+# d2H Mass Balance Models
+
+## WLL
+
+```{r,warning=F}
+
+#calculate offset between water d2H values inferred from terr-aq biomarker d2H values 
+#here using water d2H values estimated from C29-C21 alkanes d2H values
+WLLd2H <- mutate(WLLd2H, Eapp_C29_C21= (1000*(((1000+C21.moss)/(1000+C29.p))-1)))
+#upper and low estimates from error on each estimate
+WLLd2H <- mutate(WLLd2H, Eapp_C29_C21_max= (1000*(((1000+C21low)/(1000+C29up))-1)))
+WLLd2H <- mutate(WLLd2H, Eapp_C29_C21_min= (1000*(((1000+C21up)/(1000+C29low))-1)))
+
+#calculate lake water values using offset given 100% -> 50% contribution of cold season end-member precipitation when the most extreme moss water d2H value is observed
+
+#n100_w = 100% winter contribution at greatest offset, all values scaled relative to offset amount
+WLLd2H <- mutate(WLLd2H, n100_w = (1*(Eapp_C29_C21/(min(WLLd2H$Eapp_C29_C21,na.rm=TRUE)))))
+
+#minimum and maximum values based on upper and lower error estimates
+WLLd2H <- mutate(WLLd2H, 
+                 n100_w_max = (1*(Eapp_C29_C21_max/(min(WLLd2H$Eapp_C29_C21_max,na.rm=TRUE)))))
+WLLd2H <- mutate(WLLd2H, 
+                 n100_w_min = (1*(Eapp_C29_C21_min/(min(WLLd2H$Eapp_C29_C21_min,na.rm=TRUE)))))
+
+#n75_w = 75% winter contribution at greatest offset, all values scaled relative to offset amount
+WLLd2H <- mutate(WLLd2H, n75_w = (.75*(Eapp_C29_C21/(min(WLLd2H$Eapp_C29_C21,na.rm=TRUE)))))
+WLLd2H <- mutate(WLLd2H, 
+                 n75_w_max = (.75*(Eapp_C29_C21_max/(min(WLLd2H$Eapp_C29_C21_max,na.rm=TRUE)))))
+WLLd2H <- mutate(WLLd2H, 
+                 n75_w_min = (.75*(Eapp_C29_C21_min/(min(WLLd2H$Eapp_C29_C21_min,na.rm=TRUE)))))
+
+#n50_w = 50% winter contribution at greatest offset, all values scaled relative to offset amount
+WLLd2H <- mutate(WLLd2H, n50_w = (.5*(Eapp_C29_C21/(min(WLLd2H$Eapp_C29_C21,na.rm=TRUE)))))
+WLLd2H <- mutate(WLLd2H, 
+                 n50_w_max = (.5*(Eapp_C29_C21_max/(min(WLLd2H$Eapp_C29_C21_max,na.rm=TRUE)))))
+WLLd2H <- mutate(WLLd2H, 
+                 n50_w_min = (.5*(Eapp_C29_C21_min/(min(WLLd2H$Eapp_C29_C21_min,na.rm=TRUE)))))
+
+
+
+#creating a mixing model for lake water where water d2H = ((1-n)*wax-inferred precip)+((n)*winter precip))
+#with n = contribution from %s calculated above
+#cold season end-member d2H = -260 permil VMSOW, estimated using OIPC monthly values for WLL
+
+#100% winter
+WLLd2H <- mutate(WLLd2H, w100_d260 = (((1-n100_w)*C29.p)+(n100_w*-260)))
+WLLd2H <- mutate(WLLd2H, w100_d260_low = (((1-n100_w_min)*C29low)+(n100_w_min*-260)))
+WLLd2H <- mutate(WLLd2H, w100_d260_up = (((1-n100_w_max)*C29up)+(n100_w_max*-260)))
+
+#75% winter
+WLLd2H <- mutate(WLLd2H, w75_d260 = (((1-n75_w)*C29.p)+(n75_w*-260)))
+WLLd2H <- mutate(WLLd2H, w75_d260_low = (((1-n75_w_min)*C29low)+(n75_w_min*-260)))
+WLLd2H <- mutate(WLLd2H, w75_d260_up = (((1-n75_w_max)*C29up)+(n75_w_max*-260)))
+
+#50% winter
+WLLd2H <- mutate(WLLd2H, w50_d260 = (((1-n50_w)*C29.p)+(n50_w*-260)))
+WLLd2H <- mutate(WLLd2H, w50_d260_low = (((1-n50_w_min)*C29low)+(n50_w_min*-260)))
+WLLd2H <- mutate(WLLd2H, w50_d260_up = (((1-n50_w_max)*C29up)+(n50_w_max*-260)))
+
+```
+
+## TS
+
+```{r,warning=F}
+
+#calculate offset between water d2H values inferred from terr-aq biomarker d2H values 
+#here using water d2H values estimated from C29-C23 alkanes d2H values
+TSd2H <- mutate(TSd2H, Eapp_C29_C23= (1000*(((1000+C23.moss)/(1000+C29.p))-1)))
+TSd2H <- mutate(TSd2H, Eapp_C29_C23_max= (1000*(((1000+C23low)/(1000+C29up))-1)))
+TSd2H <- mutate(TSd2H, Eapp_C29_C23_min= (1000*(((1000+C23up)/(1000+C29low))-1)))
+
+#calculate lake water values using offset given 100% -> 50% contribution of cold season end-member precipitation when the most extreme moss water d2H value is observed
+
+#n100_w = 100% winter contribution at greatest offset, all values scaled relative to offset amount
+TSd2H <- mutate(TSd2H, n100_w = (1*(Eapp_C29_C23/(min(TSd2H$Eapp_C29_C23,na.rm=TRUE)))))
+TSd2H <- mutate(TSd2H, n100_w_max = (1*(Eapp_C29_C23_max/(min(TSd2H$Eapp_C29_C23_max,na.rm=TRUE)))))
+TSd2H <- mutate(TSd2H, n100_w_min = (1*(Eapp_C29_C23_min/(min(TSd2H$Eapp_C29_C23_min,na.rm=TRUE)))))
+
+#n75_w = 75% winter contribution at greatest offset, all values scaled relative to offset amount
+TSd2H <- mutate(TSd2H, n75_w = (.75*(Eapp_C29_C23/(min(TSd2H$Eapp_C29_C23,na.rm=TRUE)))))
+TSd2H <- mutate(TSd2H, n75_w_max = (.75*(Eapp_C29_C23_max/(min(TSd2H$Eapp_C29_C23_max,na.rm=TRUE)))))
+TSd2H <- mutate(TSd2H, n75_w_min = (.75*(Eapp_C29_C23_min/(min(TSd2H$Eapp_C29_C23_min,na.rm=TRUE)))))
+
+#n50_w = 50% winter contribution at greatest offset, all values scaled relative to offset amount
+TSd2H <- mutate(TSd2H, n50_w = (.5*(Eapp_C29_C23/(min(TSd2H$Eapp_C29_C23,na.rm=TRUE)))))
+TSd2H <- mutate(TSd2H, n50_w_max = (.5*(Eapp_C29_C23_max/(min(TSd2H$Eapp_C29_C23_max,na.rm=TRUE)))))
+TSd2H <- mutate(TSd2H, n50_w_min = (.5*(Eapp_C29_C23_min/(min(TSd2H$Eapp_C29_C23_min,na.rm=TRUE)))))
+
+#creating a mixing model for lake water where water d2H = ((1-n)*wax-inferred precip)+((n)*winter precip))
+#with n = contribution from %s calculated above
+#cold season end-member d2H = -220 permil VMSOW, estimated using OIPC monthly values for TS
+
+#100% winter
+TSd2H <- mutate(TSd2H, w100_d220 = (((1-n100_w)*C29.p)+(n100_w*-220)))
+TSd2H <- mutate(TSd2H, w100_d220_low = (((1-n100_w_min)*C29low)+(n100_w_min*-220)))
+TSd2H <- mutate(TSd2H, w100_d220_up = (((1-n100_w_max)*C29up)+(n100_w_max*-220)))
+
+#75% winter
+TSd2H <- mutate(TSd2H, w75_d220 = (((1-n75_w)*C29.p)+(n75_w*-220)))
+TSd2H <- mutate(TSd2H, w75_d220_low = (((1-n75_w_min)*C29low)+(n75_w_min*-220)))
+TSd2H <- mutate(TSd2H, w75_d220_up = (((1-n75_w_max)*C29up)+(n75_w_max*-220)))
+
+#50% winter
+TSd2H <- mutate(TSd2H, w50_d220 = (((1-n50_w)*C29.p)+(n50_w*-220)))
+TSd2H <- mutate(TSd2H, w50_d220_low = (((1-n50_w_min)*C29low)+(n50_w_min*-220)))
+TSd2H <- mutate(TSd2H, w50_d220_up = (((1-n50_w_max)*C29up)+(n50_w_max*-220)))
+
+```
+
+## N3
+
+```{r,warning=F}
+
+#calculate offset between water d2H values inferred from terr-aq biomarker d2H values 
+#here using water d2H values estimated from C28-C24 alkanoic acid d2H values
+N3d2H <- mutate(N3d2H, Eapp_C28_C24= (1000*(((1000+C24.moss)/(1000+C28.p))-1)))
+N3d2H <- mutate(N3d2H, Eapp_C28_C24_min =(1000*(((1000+C24up)/(1000+C28low))-1)))
+N3d2H <- mutate(N3d2H, Eapp_C28_C24_max =(1000*(((1000+C24low)/(1000+C28up))-1)))
+
+#calculate lake water values using offset given 100% -> 50% contribution of cold season end-member precipitation when the most extreme moss water d2H value is observed
+
+#n100_w = 100% winter contribution at greatest offset, all values scaled relative to offset amount
+N3d2H <- mutate(N3d2H, n100_w = (1*(Eapp_C28_C24/(min(N3d2H$Eapp_C28_C24,na.rm=TRUE)))))
+N3d2H <- mutate(N3d2H, n100_w_min = (1*(Eapp_C28_C24_min/(min(N3d2H$Eapp_C28_C24_min,na.rm=TRUE)))))
+N3d2H <- mutate(N3d2H, n100_w_max = (1*(Eapp_C28_C24_max/(min(N3d2H$Eapp_C28_C24_max,na.rm=TRUE)))))
+
+#n75_w = 75% winter contribution at greatest offset, all values scaled relative to offset amount
+N3d2H <- mutate(N3d2H, n75_w = (.75*(Eapp_C28_C24/(min(N3d2H$Eapp_C28_C24,na.rm=TRUE)))))
+N3d2H <- mutate(N3d2H, n75_w_min = (.75*(Eapp_C28_C24_min/(min(N3d2H$Eapp_C28_C24_min,na.rm=TRUE)))))
+N3d2H <- mutate(N3d2H, n75_w_max = (.75*(Eapp_C28_C24_max/(min(N3d2H$Eapp_C28_C24_max,na.rm=TRUE)))))
+
+#n50_w = 50% winter contribution at greatest offset, all values scaled relative to offset amount
+N3d2H <- mutate(N3d2H, n50_w = (.5*(Eapp_C28_C24/(min(N3d2H$Eapp_C28_C24,na.rm=TRUE)))))
+N3d2H <- mutate(N3d2H, n50_w_min = (.5*(Eapp_C28_C24_min/(min(N3d2H$Eapp_C28_C24_min,na.rm=TRUE)))))
+N3d2H <- mutate(N3d2H, n50_w_max = (.5*(Eapp_C28_C24_max/(min(N3d2H$Eapp_C28_C24_max,na.rm=TRUE)))))
+
+#creating a mixing model for lake water where water d2H = ((1-n)*wax-inferred precip)+((n)*winter precip))
+#with n = contribution from %s calculated above
+#cold season end-member d2H = -190 permil VMSOW, estimated using OIPC monthly values for N3
+
+#100% winter
+N3d2H <- mutate(N3d2H, w100_d190 = (((1-n100_w)*C28.p)+(n100_w*-190)))
+N3d2H <- mutate(N3d2H, w100_d190_up = (((1-n100_w_max)*C28up)+(n100_w_max*-190)))
+N3d2H <- mutate(N3d2H, w100_d190_low = (((1-n100_w_min)*C28low)+(n100_w_min*-190)))
+
+#75% winter
+N3d2H <- mutate(N3d2H, w75_d190 = (((1-n75_w)*C28.p)+(n75_w*-190)))
+N3d2H <- mutate(N3d2H, w75_d190_up = (((1-n75_w_max)*C28up)+(n75_w_max*-190)))
+N3d2H <- mutate(N3d2H, w75_d190_low = (((1-n75_w_min)*C28low)+(n75_w_min*-190)))
+
+#50% winter
+N3d2H <- mutate(N3d2H, w50_d190 = (((1-n50_w)*C28.p)+(n50_w*-190)))
+N3d2H <- mutate(N3d2H, w50_d190_up = (((1-n50_w_max)*C28up)+(n50_w_max*-190)))
+N3d2H <- mutate(N3d2H, w50_d190_low = (((1-n50_w_min)*C28low)+(n50_w_min*-190)))
+```
+
+### Mass Balance Models, Plotted
+
+#### WLL
+
+```{r WLL water model,warning=F}
+
+#WLL
+p1 <- ggplot(WLLd2H, aes(Age, C29.p))+geom_line()+
+  geom_ribbon(aes(ymin=C29up, ymax=C29low, fill="precip"), alpha=0.25)+
+  geom_line(aes(Age, C21.moss))+
+  geom_ribbon(aes(ymin=C21up, ymax=C21low, fill="moss water"), alpha=0.25)+
+  geom_line(aes(Age, w100_d260))+
+  geom_ribbon(aes(ymin=w100_d260_up, ymax=w100_d260_low, fill="100% winter"), alpha=0.25)+
+  geom_line(aes(Age, w75_d260))+
+  geom_ribbon(aes(ymin=w75_d260_up, ymax=w75_d260_low, fill="75% winter"), alpha=0.25)+
+  geom_line(aes(Age, w50_d260))+
+  geom_ribbon(aes(ymin=w50_d260_up, ymax=w50_d260_low, fill="50% winter"), alpha=0.25)+
+  ylim(-350, 0)+
+  xlim(0,10000)+
+  geom_hline(yintercept=-153)+
+  theme(legend.position="none")+
+  ylab(expression(delta^{"2"}*"H"["water "]*" (\u2030) VSMOW"))+
+  xlab("Age (cal yrs BP)")+
+  ggtitle(expression(paste("Wax Lips Lake Modelled Water")))+
+  theme(
+    plot.title = element_text(color="magenta", hjust=0.5, size=12, 
+                              face="bold"))
+
+p1
+
+#for comparison, lake water d2H values inferred from chiron d18O values
+ggplot(WLLchiron, aes(Age, d2Hlw))+geom_line()+
+  geom_ribbon(aes(ymin=WLLchiron$d2Hlw_up, ymax=WLLchiron$d2Hlw_low), alpha=0.5)+
+  ylim(-350,0)+
+  xlim(0,10000)+
+  geom_hline(yintercept=-153)+
+  ylab(expression(delta^{"2"}*"H"["water "]*" (\u2030) VSMOW"))+
+  xlab("Age (cal yrs BP)")+
+  ggtitle(expression(paste("WLL Chiron-Inferred Lake Water")))+
+  theme(
+    plot.title = element_text(color="magenta", hjust=0.5, size=12, 
+                              face="bold"))
+```
+
+#### TS
+
+```{r TS water model,warning=F}
+#TS
+p2 <- ggplot(TSd2H, aes(Age, C29.p))+geom_line()+
+  geom_ribbon(aes(ymin=C29up, ymax=C29low, fill="precip"), alpha=0.25)+
+  geom_line(aes(Age, C23.moss))+
+  geom_ribbon(aes(ymin=C23up, ymax=C23low, fill="moss water"), alpha=0.25)+
+  geom_line(aes(Age, w100_d220))+
+  geom_ribbon(aes(ymin=w100_d220_up, ymax=w100_d220_low, fill="100% winter"), alpha=0.25)+
+  geom_line(aes(Age, w75_d220))+
+  geom_ribbon(aes(ymin=w75_d220_up, ymax=w75_d220_low, fill="75% winter"), alpha=0.25)+
+  geom_line(aes(Age, w50_d220))+
+  geom_ribbon(aes(ymin=w50_d220_up, ymax=w50_d220_low, fill="50% winter"), alpha=0.25)+
+  ylim(-350, 0)+
+  xlim(0,10000)+
+  theme(axis.title.y = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks.y=element_blank(),
+        legend.position = "none")+
+  xlab("Age (cal yrs BP)")+
+  ggtitle(expression(paste("Trifna Sø Modelled Water")))+
+  theme(
+    plot.title = element_text(color="magenta", hjust=0.5, size=12, 
+                              face="bold"))
+
+p2
+```
+
+#### N3
+
+```{r N3 water model,warning=F}
+#N3
+p3 <- ggplot(N3d2H, aes(Age, C28.p))+geom_line()+
+  geom_ribbon(aes(ymin=C28up, ymax=C28low, fill="precip"), alpha=0.25)+
+  geom_line(aes(Age, C24.moss))+
+  geom_ribbon(aes(ymin=C24up, ymax=C24low, fill="moss water"), alpha=0.25)+
+  geom_line(aes(Age, w100_d190))+
+  geom_ribbon(aes(ymin=w100_d190_up, ymax=w100_d190_low, fill="100% winter"), alpha=0.25)+
+  geom_line(aes(Age, w75_d190))+
+  geom_ribbon(aes(ymin=w75_d190_up, ymax=w75_d190_low, fill="75% winter"), alpha=0.25)+
+  geom_line(aes(Age, w50_d190))+
+  geom_ribbon(aes(ymin=w50_d190_up, ymax=w50_d190_low, fill="50% winter"), alpha=0.25)+
+  ylim(-350, 0)+
+  xlim(0,10000)+
+  geom_hline(yintercept=-96)+
+  theme(axis.title.y = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks.y=element_blank(),
+        legend.position = c(0.15,.2))+
+  xlab("Age (cal yrs BP)")+
+  ggtitle(expression(paste("Lake N3 Modelled Water")))+
+  theme(
+    plot.title = element_text(color="magenta", hjust=0.5, size=12, 
+                              face="bold"))
+
+p3
+
+#for comparison, lake water d2H values inferred from chiron d18O values
+ggplot(N3chiron, aes(age, d2Hlw))+geom_line()+
+  geom_ribbon(aes(ymin=d2Hlw_up, ymax=d2Hlw_low), alpha=0.5)+
+  ylim(-350,0)+
+  xlim(0,10000)+
+  geom_hline(yintercept=-96)+
+  ylab(expression(delta^{"2"}*"H"["water "]*" (\u2030) VSMOW"))+
+  xlab("Age (cal yrs BP)")+
+  ggtitle(expression(paste("N3 Chiron-Inferred Lake Water")))+
+  theme(
+    plot.title = element_text(color="magenta", hjust=0.5, size=12, 
+                              face="bold"))
+```
+
+##### Plot Grid
+
+```{r combined water model,warning=F}
+plot_grid(p1,p2,p3, align="hv", ncol=3, axis="l", rel_widths=c(1,1,1), rel_heights = c(1,1,1))
+
+```
+
+# Additional Proxy Data from Trifna Sø
+
+## TS Biomarker Abundances
+
+```{r TS biomarker abundances, warning=F}
+
+#concentration of waxes and GDGTs along with elemental data reported by Kusch et al 2019
+biomarkers <- read.csv("data/Published Data/Trifna So/TS Biomarkers Concentrations.csv")
+
+#calculating ratio of isoGDGT-0:Crenarchaeol
+biomarkers <- mutate(biomarkers, GDGT0_Cren = isoGDGT0/cren)
+
+ggplot(biomarkers, aes(Age, GDGT0_Cren))+geom_line()+
+  xlim(0,10000)+
+  ylab("iGDGT-0:Cren")+
+  xlab("Age (cal yrs BP)")+
+  ggtitle(expression(paste("TS Biomarker Abundances")))+
+  theme(
+    plot.title = element_text(color="magenta", hjust=0.5, size=12, 
+                              face="bold"))
+
+#calculating proportional abundance of brGDGT-IIIa (%)
+biomarkers <- mutate(biomarkers, 
+                     brGDGTIIIa_FA =
+                       (brGDGT_IIIa/(brGDGT_IIIa+brGDGT_IIIa.+brGDGT_IIIb+brGDGT_IIIb.+
+                        brGDGT_IIIc+brGDGT_IIIc.+brGDGT_IIa+brGDGT_IIa.+brGDGT_IIb+brGDGT_IIb.+
+                          brGDGT_IIc+brGDGT_IIc.+brGDGT_Ia+brGDGT_Ib+brGDGT_Ic)))
+
+ggplot(biomarkers, aes(Age, brGDGTIIIa_FA))+geom_line()+
+  xlim(0,10000)+
+  ylab("brGDGT-IIIa (%)")+
+  xlab("Age (cal yrs BP)")+
+  ggtitle(expression(paste("TS Biomarker Abundances")))+
+  theme(
+    plot.title = element_text(color="magenta", hjust=0.5, size=12, 
+                              face="bold"))
+```
+
+## TS Macrofossil Abundances
+
+```{r TS macrofossil abundances,warning=F}
+#concentration of macrofossils from vegetation, insects and crustaceans reported by Kusch et al 2019
+macrofossils <- read.csv("data/Published Data/Trifna So/TS Macrofossil Abundances.csv")
+
+ggplot(macrofossils, aes(Age, Chironomidae))+geom_col(orientation=F)+
+  xlim(0,10000)+
+  ylab("Chironomid (hc/g)")+
+  xlab("Age (cal yrs BP)")+
+  ggtitle(expression(paste("TS Biomarker Abundances")))+
+  theme(
+    plot.title = element_text(color="magenta", hjust=0.5, size=12, 
+                              face="bold"))
+
+ggplot(macrofossils, aes(Age, Daphnia))+geom_col(orientation=F)+
+  xlim(0,10000)+
+  ylab("Daphnia spp. (e/g)")+
+  xlab("Age (cal yrs BP)")+
+  ggtitle(expression(paste("TS Biomarker Abundances")))+
+  theme(
+    plot.title = element_text(color="magenta", hjust=0.5, size=12, 
+                              face="bold"))
+
+
+```
+
+### TS Correlation Matrix
+
+```{r TS correlation matrix,warning=F}
+
+#align multi-proxy data from TS by depth
+#use biomarkers, macrofossils, d2H data
+#excluding d13C data because sub-sampling depths do not align with other proxies
+
+#streamline data frames for more manageable data presentation of key variables
+names(biomarkers)
+biomarkers_trim <- biomarkers[,-c(2,7:27,29:33,35:59)]
+colnames(biomarkers_trim) <- c("Depth","TN","TS","TOC","TIC","C23ug","C29ug",
+                               "iso0_Cren","IIIa")
+
+names(macrofossils)
+macrofossils_trim <- macrofossils[,-c(2:4,6:8)]
+colnames(macrofossils_trim) <- c("Depth","Daphnia","Chiron")
+
+names(TSd2H)
+TSd2H_trim <- TSd2H[,-c(1:3,5:6,8:9,11:53)]
+names(TSd2H_trim)
+colnames(TSd2H_trim) <- c("Depth","d2H_C23","d2H_C29")
+
+#merge by depth
+correlation <- biomarkers_trim %>% inner_join(macrofossils_trim, by="Depth")
+correlation <- correlation %>% inner_join(TSd2H_trim, by="Depth")
+
+#reorder columns
+correlation <- correlation[,c(1:5,10:11,8:9,6:7,12:13)]
+names(correlation)
+
+#remove Depth for calculating correlation metrics
+correlation <- correlation[,-c(1)]
+
+corr <- cor(correlation, method="pearson", use="pairwise.complete.obs")
+p.mat <- cor_pmat(correlation)
+
+ggcorrplot(corr, type="lower", p.mat=p.mat, sig.level = 0.05, colors=c("#8B8878","white","#15AFD0"),
+           outline.color="black",
+           hc.order=F)+
+  ggtitle(expression(paste("TS Correlation Matrix")))+
+  theme(
+    plot.title = element_text(color="magenta", hjust=0.5, size=12, 
+                              face="bold"))
+  
+
+```
+
+## TS Plant Wax d13C
+
+```{r TS downcore d13C wax,warning=F}
+#TS Plant Wax (Alkane) d13C
+TSalkd13C <- read.csv("data/This Study/ Trinfa So/TS Alkane d13C.csv")
+
+ggplot(TSalkd13C, aes(Age, C23))+geom_line(aes(color="C23"))+
+  geom_line(aes(Age, C21, color="C21"))+
+  xlim(0,10000)+
+  ylim(-36,-28)+
+  ylab(expression(delta^{"13"}*"C"["wax "]*" (\u2030) VPDB"))+
+  xlab("Age (cal yrs BP)")+
+  labs(colour="Alkane")+
+  ggtitle(expression(paste("TS "*delta^{13}*"C Short-Chain Plant Waxes")))+
+  theme(
+    plot.title = element_text(color="magenta", hjust=0.5, size=12, 
+                              face="bold"))
+
+ggplot(TSalkd13C, aes(Age, C29))+geom_line(aes(color="C29"))+
+  geom_line(aes(Age, C27, color="C27"))+
+  xlim(0,10000)+
+  ylim(-36,-28)+
+  ylab(expression(delta^{"13"}*"C"["wax "]*" (\u2030) VPDB"))+
+  xlab("Age (cal yrs BP)")+
+  labs(colour="Alkane")+
+  ggtitle(expression(paste("TS "*delta^{13}*"C Long-Chain Plant Waxes")))+
+  theme(
+    plot.title = element_text(color="magenta", hjust=0.5, size=12, 
+                              face="bold"))
+
+
+```
+
+# TS Methane Model
+
+## Using d13C Wax
+
+```{r TS methane model with d13C,warning=F}
+#since d13C of DIC is unknown in system independently, using the assumption that early Holocene d13C values from C23 represent baseline 
+
+#assuming d13Cmoss w/o any uptake of CH4 = -30 permil VPDB, and methane d13C of methane = -50 permil VPDB, calculating percent of CH4-derived C in d13Cmoss
+TSalkd13C <- mutate(TSalkd13C, CH4_percent = ((C23-(-30))/(-50-(-30))))
+
+ggplot(TSalkd13C, aes(Age, C23, color="moss C"))+geom_line()+
+  geom_hline(yintercept=-30)+
+  xlim(0,10000)+
+  ylim(-38,-29)+
+  ylab(expression(delta^{"13"}*"C"["wax "]*" (\u2030) VPDB"))+
+  xlab("Age (cal yrs BP)")+
+  labs(colour="Model Data")+
+  ggtitle(expression(paste("TS "*delta^{13}*"C Model End-Members")))+
+  theme(
+    plot.title = element_text(color="magenta", hjust=0.5, size=12, 
+                              face="bold"))
+
+ggplot(TSalkd13C, aes(Age, CH4_percent))+geom_area()+
+  xlim(0,10000)+
+  ylim(0,1)+
+  ylab(expression(paste("CH"[4]*"-derived C (%)")))+
+  xlab("Age (cal yrs BP)")+
+  ggtitle(expression(paste("TS Estimated CH"[4]*"-Derived C in Moss Wax")))+
+  theme(
+    plot.title = element_text(color="magenta", hjust=0.5, size=12, 
+                              face="bold"))
+```
+
+## Using d2H Wax
+
+```{r TS methane model with d2H,warning=F}
+#assuming contemporaneous d2Hprecip can be estimated from d2HC29, and that d2HCH4 = -250 permil VSMOW lighter than d2Hprecip on average
+
+#calculating CH4 d2H values through the Holocene relative to precip d2H values
+TSd2H <- mutate(TSd2H, d2HCH4 = (1000*(((1000+C29.p)/(1000-(-250)))-1)))
+
+#calculating percent of CH4-derived H in d2Hmoss
+TSd2H <- mutate(TSd2H, CH4_percent = ((C23.moss-(C29.p))/(d2HCH4-(C29.p))))
+
+#plot showing d2H precip, d2H moss water, and d2H CH4
+ggplot(TSd2H, aes(Age, C29.p, color="precip"))+geom_line()+
+  geom_line(aes(Age,C23.moss, color="moss water"))+
+  geom_line(aes(Age, d2HCH4, color="CH4"))+
+  ylim(-400,-100)+
+  xlim(0,10000)+
+  ylab(expression(delta^{"2"}*"H (\u2030) VSMOW"))+
+  xlab("Age (cal yrs BP)")+
+  labs(colour="Model Data")+
+  ggtitle(expression(paste("TS "*delta^{2}*"H Model End-Members")))+
+  theme(
+    plot.title = element_text(color="magenta", hjust=0.5, size=12, 
+                              face="bold"))
+
+ggplot(TSd2H, aes(Age, CH4_percent))+geom_area()+
+  xlim(0,10000)+
+  ylim(0,1)+
+  ylab(expression(paste("CH"[4]*"-derived H (%)")))+
+  xlab("Age (cal yrs BP)")+
+  ggtitle(expression(paste("TS Estimated CH"[4]*"-Derived H in Moss Wax")))+
+  theme(
+    plot.title = element_text(color="magenta", hjust=0.5, size=12, 
+                              face="bold"))
+
+```
